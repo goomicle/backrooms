@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Backrooms - Ultra Detail Liminal</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        #blocker {
+            position: absolute; width: 100%; height: 100%;
+            background-color: rgba(5, 5, 2, 0.95);
+            display: flex; justify-content: center; align-items: center;
+            color: #8c8551; font-family: 'Courier New', Courier, monospace;
+            text-align: center; z-index: 10; cursor: pointer;
+        }
+        #instructions { font-size: 18px; text-shadow: 0 0 10px rgba(140, 133, 81, 0.5); }
+        /* Viñeta para visión de túnel */
+        #vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+            z-index: 4; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="vignette"></div>
+    <div id="blocker">
+        <div id="instructions">
+            <h1 style="font-size: 45px; margin-bottom: 5px; color: #7a1515;">NIVEL 0: ZONA MANCHADA</h1>
+            <p style="font-style: italic; color: #5c5731;">Alguien, o algo, estuvo aquí.</p><br>
+            <p>Click para encender la linterna</p>
+            <p><b>W, A, S, D</b> = Caminar | <b>SHIFT</b> = Correr | <b>ESPACIO</b> = Saltar</p>
+        </div>
+    </div>
+
+    <!-- Librerías Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+    <script>
+        // --- 1. CONFIGURACIÓN DEL ENTORNO ---
+        const scene = new THREE.Scene();
+        const fogColor = new THREE.Color(0x0a0905); 
+        scene.background = fogColor;
+        scene.fog = new THREE.FogExp2(fogColor, 0.035); 
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Calidad de Sombras
+        renderer.shadowMap.enabled = true; 
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.PointerLockControls(camera, document.body);
+        const blocker = document.getElementById('blocker');
+
+        document.getElementById('instructions').addEventListener('click', () => { controls.lock(); });
+        controls.addEventListener('lock', () => { blocker.style.display = 'none'; });
+        controls.addEventListener('unlock', () => { blocker.style.display = 'flex'; });
+        scene.add(controls.getObject());
+
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let canJump = false, isRunning = false;
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const playerHeight = 16;
+        controls.getObject().position.set(0, playerHeight, 0);
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'KeyW': moveForward = true; break;
+                case 'KeyA': moveLeft = true; break;
+                case 'KeyS': moveBackward = true; break;
+                case 'KeyD': moveRight = true; break;
+                case 'Space': if(canJump) velocity.y += 45; canJump = false; break;
+                case 'ShiftLeft': isRunning = true; break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyW': moveForward = false; break;
+                case 'KeyA': moveLeft = false; break;
+                case 'KeyS': moveBackward = false; break;
+                case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': isRunning = false; break;
+            }
+        });
+
+        // --- 2. GENERADOR DE TEXTURAS DE ULTRA DETALLE ---
+        function createTexture(type) {
+            const canvas = document.createElement('canvas');
+            const size = 1024; // AUMENTADO: Máxima resolución 1024x1024
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            function drawBloodSplatter(ctx, width, height, count, maxRadius) {
+                for(let i = 0; i < count; i++) {
+                    ctx.fillStyle = `rgba(${50 + Math.random()*40}, ${5 + Math.random()*10}, ${5 + Math.random()*10}, ${0.7 + Math.random()*0.3})`;
+                    let cx = Math.random() * width;
+                    let cy = Math.random() * height;
+                    let radius = Math.random() * maxRadius + 2;
+                    
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    let splats = Math.floor(Math.random() * 8);
+                    for(let j = 0; j < splats; j++) {
+                        ctx.beginPath();
+                        ctx.arc(
+                            cx + (Math.random() * radius * 4 - radius * 2), 
+                            cy + (Math.random() * radius * 4 - radius * 2), 
+                            Math.random() * (radius / 3), 0, Math.PI * 2
+                        );
+                        ctx.fill();
+                    }
+                }
+            }
+
+            if (type === 'wallpaper') {
+                ctx.fillStyle = '#b5aa5e';
+                ctx.fillRect(0, 0, size, size);
+                
+                ctx.fillStyle = '#9c914b';
+                for (let x = 0; x < size; x += 128) {
+                    for (let y = 0; y < size; y += 128) {
+                        ctx.beginPath(); ctx.arc(x + 64, y + 64, 24, 0, Math.PI * 2); ctx.fill();
+                        ctx.fillRect(x + 56, y, 16, 128); ctx.fillRect(x, y + 56, 128, 16);
+                    }
+                }
+
+                for(let i=0; i<60; i++) {
+                    ctx.fillStyle = `rgba(30, 25, 10, ${Math.random()*0.2})`;
+                    ctx.fillRect(Math.random()*size, 0, Math.random()*20+10, size);
+                }
+
+                for(let i=0; i<40000; i++) {
+                    ctx.fillStyle = `rgba(50, 40, 10, ${Math.random()*0.15})`;
+                    ctx.fillRect(Math.random()*size, Math.random()*size, 3, 3);
+                }
+
+                // Las manchas en la pared se mantienen igual
+                drawBloodSplatter(ctx, size, size, 25, 60);
+            } 
+            else if (type === 'carpet') {
+                for (let x = 0; x < size; x+=4) {
+                    for (let y = 0; y < size; y+=4) {
+                        const r = Math.random();
+                        // AUMENTADO: Colores amarillo crema vibrantes y enfermizos
+                        ctx.fillStyle = r > 0.6 ? '#d1c786' : r > 0.3 ? '#bfb573' : '#a39958';
+                        ctx.fillRect(x, y, 4, 4);
+                    }
+                }
+                // DISMINUIDO: Menos charcos de sangre en el suelo y más pequeños
+                drawBloodSplatter(ctx, size, size, 3, 40); 
+            }
+            else if (type === 'ceiling') {
+                ctx.fillStyle = '#9e997a';
+                ctx.fillRect(0, 0, size, size);
+                ctx.strokeStyle = '#63604b';
+                ctx.lineWidth = 12;
+                ctx.strokeRect(0, 0, size, size);
+                
+                for(let i=0; i<30000; i++) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                    ctx.fillRect(Math.random()*size, Math.random()*size, 3, 3);
+                }
+                
+                for(let i=0; i<8; i++) {
+                    ctx.fillStyle = `rgba(60, 50, 30, ${Math.random()*0.4})`;
+                    ctx.beginPath();
+                    ctx.arc(Math.random()*size, Math.random()*size, Math.random()*120+40, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        // --- 3. MATERIALES (Bump Map Extremo) ---
+        const wallTex = createTexture('wallpaper'); wallTex.repeat.set(4, 4);
+        const wallMat = new THREE.MeshStandardMaterial({ 
+            map: wallTex, 
+            bumpMap: wallTex, 
+            bumpScale: 0.35,  // AUMENTADO: Paredes más rugosas
+            roughness: 0.8, 
+            metalness: 0.1 
+        });
+
+        const floorTex = createTexture('carpet'); floorTex.repeat.set(200, 200);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            map: floorTex, 
+            bumpMap: floorTex, 
+            bumpScale: 0.4, // AUMENTADO: Suelo con mucho relieve
+            roughness: 0.95 
+        });
+
+        const ceilingTex = createTexture('ceiling'); ceilingTex.repeat.set(100, 100);
+        const ceilingMat = new THREE.MeshStandardMaterial({ 
+            map: ceilingTex, 
+            bumpMap: ceilingTex,
+            bumpScale: 0.1,
+            roughness: 0.9 
+        });
+
+        // --- 4. CONSTRUCCIÓN DEL ESPACIO ---
+        const mapSize = 600;
+        
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(mapSize, mapSize), floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true; 
+        scene.add(floor);
+
+        const ceilingHeight = 28;
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(mapSize, mapSize), ceilingMat);
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = ceilingHeight;
+        ceiling.receiveShadow = true;
+        scene.add(ceiling);
+
+        const walls = [];
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+        for (let x = -mapSize/2; x < mapSize/2; x += 50) {
+            for (let z = -mapSize/2; z < mapSize/2; z += 50) {
+                if (Math.abs(x) < 30 && Math.abs(z) < 30) continue;
+
+                if (Math.random() < 0.4) { 
+                    const type = Math.floor(Math.random() * 3);
+                    let w = 15, d = 15; 
+                    if (type === 0) { w = 50; d = 10; } 
+                    if (type === 1) { w = 10; d = 50; } 
+
+                    const wall = new THREE.Mesh(boxGeo, wallMat);
+                    wall.scale.set(w, ceilingHeight, d);
+                    wall.position.set(x + (Math.random()*10 - 5), ceilingHeight/2, z + (Math.random()*10 - 5));
+                    
+                    wall.castShadow = true;    
+                    wall.receiveShadow = true; 
+
+                    scene.add(wall);
+                    walls.push({ mesh: wall, box: new THREE.Box3().setFromObject(wall) });
+                }
+            }
+        }
+
+        // --- SISTEMA DE PARTÍCULAS DE POLVO FLOTANTE ---
+        const particleCount = 10000;
+        const dustGeo = new THREE.BufferGeometry();
+        const dustPos = new Float32Array(particleCount * 3);
+        for(let i=0; i < particleCount * 3; i++) {
+            dustPos[i] = (Math.random() - 0.5) * mapSize; 
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        const dustMat = new THREE.PointsMaterial({ 
+            color: 0x999988, 
+            size: 0.15, 
+            transparent: true, 
+            opacity: 0.4 
+        });
+        const dustParticles = new THREE.Points(dustGeo, dustMat);
+        dustParticles.position.y = 15;
+        scene.add(dustParticles);
+
+        // --- 5. ILUMINACIÓN ---
+        scene.add(new THREE.AmbientLight(0x3a3828, 0.05)); 
+        
+        // 🔦 LINTERNA (AHORA MUCHO MÁS PODEROSA)
+        const flashlight = new THREE.SpotLight(0xfffcd6, 6.0, 300, Math.PI / 4.5, 0.5, 1.2); // Intensidad, distancia y ángulo aumentados
+        flashlight.position.set(2, -2, -1); 
+        flashlight.castShadow = true;
+        
+        flashlight.shadow.mapSize.width = 1024;
+        flashlight.shadow.mapSize.height = 1024;
+        flashlight.shadow.camera.near = 1;
+        flashlight.shadow.camera.far = 300;
+        flashlight.shadow.bias = -0.001; 
+
+        flashlight.target.position.set(0, 0, -10);
+        camera.add(flashlight);
+        camera.add(flashlight.target);
+        scene.add(camera);
+
+        // 💡 LUCES DEL TECHO
+        const lightPanelGeo = new THREE.PlaneGeometry(6, 6);
+        const lightOffMat = new THREE.MeshBasicMaterial({ color: 0x111111 }); 
+        const lightOnMat = new THREE.MeshBasicMaterial({ color: 0xfffcd4 });  
+        const flickeringLights = [];
+
+        for (let x = -mapSize/2; x < mapSize/2; x += 40) {
+            for (let z = -mapSize/2; z < mapSize/2; z += 40) {
+                const isWorking = Math.random() < 0.15;
+                
+                const panel = new THREE.Mesh(lightPanelGeo, isWorking ? lightOnMat : lightOffMat);
+                panel.rotation.x = Math.PI / 2;
+                panel.position.set(x, ceilingHeight - 0.1, z);
+                scene.add(panel);
+
+                if (isWorking) {
+                    const pointLight = new THREE.PointLight(0xfff5c2, 0.8, 80);
+                    pointLight.position.set(x, ceilingHeight - 2, z);
+                    scene.add(pointLight);
+                    flickeringLights.push({ light: pointLight, panel: panel, baseIntensity: 0.8 });
+                }
+            }
+        }
+
+        // --- 6. BUCLE DE JUEGO, FÍSICAS Y ANIMACIONES ---
+        let prevTime = performance.now();
+        let walkTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+
+            dustParticles.rotation.y += 0.0002;
+            dustParticles.position.y += Math.sin(time * 0.0005) * 0.005;
+
+            if (controls.isLocked === true) {
+                const delta = (time - prevTime) / 1000;
+
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= 9.8 * 20.0 * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                const isMoving = (moveForward || moveBackward || moveLeft || moveRight);
+                const speed = isRunning ? 600.0 : 200.0;
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
+
+                // --- AUMENTADO: Head bobbing + Vibración de cámara ---
+                if (isMoving && canJump) {
+                    walkTime += delta * (isRunning ? 12 : 7);
+                    
+                    // Balanceo natural
+                    const bobY = Math.sin(walkTime) * (isRunning ? 0.8 : 0.4);
+                    const bobX = Math.cos(walkTime / 2) * (isRunning ? 0.4 : 0.2);
+                    
+                    // Vibración / Temblor de pasos
+                    const vibIntensity = isRunning ? 0.15 : 0.04;
+                    const vibY = (Math.random() - 0.5) * vibIntensity;
+                    const vibX = (Math.random() - 0.5) * vibIntensity;
+                    
+                    // Aplicar balanceo y temblor a la cámara
+                    controls.getObject().position.y = playerHeight + bobY + vibY;
+                    
+                    // La linterna también tiembla
+                    flashlight.position.x = 2 + bobX + vibX;
+                    flashlight.position.y = -2 + bobY + vibY;
+                } else {
+                    controls.getObject().position.y += (playerHeight - controls.getObject().position.y) * 0.1;
+                }
+
+                // Colisiones
+                const nextX = controls.getObject().position.x - (velocity.x * delta);
+                const nextZ = controls.getObject().position.z - (velocity.z * delta);
+                const playerRadius = 3.5; 
+                let collisionX = false;
+                let collisionZ = false;
+
+                for (let i = 0; i < walls.length; i++) {
+                    const box = walls[i].box;
+                    if (nextX + playerRadius > box.min.x && nextX - playerRadius < box.max.x &&
+                        controls.getObject().position.z + playerRadius > box.min.z && controls.getObject().position.z - playerRadius < box.max.z) {
+                        collisionX = true;
+                    }
+                    if (controls.getObject().position.x + playerRadius > box.min.x && controls.getObject().position.x - playerRadius < box.max.x &&
+                        nextZ + playerRadius > box.min.z && nextZ - playerRadius < box.max.z) {
+                        collisionZ = true;
+                    }
+                }
+
+                if (!collisionX) controls.moveRight(-velocity.x * delta); else velocity.x = 0;
+                if (!collisionZ) controls.moveForward(-velocity.z * delta); else velocity.z = 0;
+
+                // Salto
+                controls.getObject().position.y += (velocity.y * delta);
+                if (controls.getObject().position.y < playerHeight) {
+                    velocity.y = 0;
+                    controls.getObject().position.y = playerHeight;
+                    canJump = true;
+                }
+
+                // Parpadeo de luces de techo
+                flickeringLights.forEach(item => {
+                    if (Math.random() < 0.1) {
+                        item.light.intensity = Math.random() * 0.3; 
+                        item.panel.material = lightOffMat; 
+                    } else {
+                        item.light.intensity = item.baseIntensity;
+                        item.panel.material = lightOnMat; 
+                    }
+                });
+                
+                // Micro-fallo eléctrico de tu linterna (ajustado a la nueva potencia)
+                if (Math.random() < 0.005) {
+                    flashlight.intensity = Math.random() * 2.5;
+                } else {
+                    flashlight.intensity = 6.0;
+                }
+            }
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
